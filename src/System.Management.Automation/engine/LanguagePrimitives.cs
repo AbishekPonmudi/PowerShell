@@ -197,12 +197,21 @@ namespace System.Management.Automation
         /// <param name="ignoreCase">True if case should be ignored.</param>
         /// <returns>SourceValue converted to destinationType.</returns>
         /// <exception cref="PSInvalidCastException">When no conversion was possible.</exception>
-        public override object ConvertFrom(object sourceValue, Type destinationType, IFormatProvider formatProvider, bool ignoreCase)
+      public override object ConvertFrom(object sourceValue, Type destinationType, IFormatProvider formatProvider, bool ignoreCase)
         {
-            string sourceAsString = (string)LanguagePrimitives.ConvertTo(sourceValue, typeof(string), formatProvider);
+            string sourceAsString = LanguagePrimitives.ConvertTo(sourceValue, typeof(string), formatProvider) as string;
+            if (!string.IsNullOrEmpty(sourceAsString) && destinationType == typeof(BigInteger)) 
+                {
+                NumberFormatInfo numberFormat = formatProvider as NumberFormatInfo ?? CultureInfo.CurrentCulture.NumberFormat;
+                string thousandsSeparator = numberFormat.NumberGroupSeparator;
+                if (sourceAsString.Contains(thousandsSeparator))
+                {
+                    sourceAsString = sourceAsString.Replace(thousandsSeparator, string.Empty);
+                }
+                return BigInteger.Parse(sourceAsString, NumberStyles.Integer, numberFormat);
+            }
             return LanguagePrimitives.ConvertTo(sourceAsString, destinationType, formatProvider);
         }
-
         /// <summary>
         /// Returns false, since this converter is not designed to be used to
         /// convert from the type associated with the converted to other types.
@@ -2943,17 +2952,12 @@ namespace System.Management.Automation
                     return result;
                 }
 
-                if (resultType == typeof(BigInteger))
-                {
-                    // Fallback for BigInteger: manual parsing using any common format.
-                    NumberStyles style = NumberStyles.AllowLeadingSign
-                        | NumberStyles.AllowDecimalPoint
-                        | NumberStyles.AllowExponent
-                        | NumberStyles.AllowHexSpecifier;
-
+               if (resultType == typeof(BigInteger))
+               { 
+                    NumberStyles style = NumberStyles.Integer | NumberStyles.AllowThousands;
+                    
                     return BigInteger.Parse(strToConvert, style, NumberFormatInfo.InvariantInfo);
                 }
-
                 // Fallback conversion for regular numeric types.
                 return GetIntegerSystemConverter(resultType).ConvertFrom(strToConvert);
             }
